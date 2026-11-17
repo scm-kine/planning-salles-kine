@@ -28,6 +28,15 @@ const PLANNING_DATA = {
     vendredi: ["matin", "apres-midi"],
   },
 
+  // Scénario de départ validé le 17 novembre 2026. Les essais enregistrés
+  // dans le navigateur restent prioritaires sur ces valeurs par défaut.
+  defaultOffsitePreferences: {
+    "lundi|apres-midi": "home",
+    "mardi|matin": "rest",
+    "mardi|apres-midi": "home",
+    "jeudi|apres-midi": "home",
+  },
+
   professionals: [
     { id: "damien", name: "Damien", color: "#a8cdea", ink: "#172936", active: true },
     { id: "johan", name: "Johan", color: "#b7dba8", ink: "#172936", active: true },
@@ -89,6 +98,15 @@ const PLANNING_DATA = {
     { professionalId: "florianne", day: "lundi", period: "matin", room: 2, typeOccupation: "partielle", start: "11:30", end: "12:00", comment: "Florianne · salle 2 · lundi de 11 h 30 à 12 h" },
     { professionalId: "florianne", day: "mercredi", period: "matin", room: 2, typeOccupation: "partielle", start: "11:30", end: "12:00", comment: "Florianne · salle 2 · mercredi de 11 h 30 à 12 h" },
     { professionalId: "florianne", day: "mercredi", period: "apres-midi", room: 2, typeOccupation: "partielle", start: "13:00", end: "15:00", approximate: true, comment: "Florianne · salle 2 · mercredi en début d’après-midi (horaire approximatif)" },
+
+    // Nouveau kiné — scénario de départ partagé
+    { professionalId: "nouveau", day: "lundi", period: "matin", room: 3, typeOccupation: "complete", start: "08:00", end: "12:00" },
+    { professionalId: "nouveau", day: "mardi", period: "matin", room: 1, typeOccupation: "complete", start: "08:00", end: "12:00" },
+    { professionalId: "nouveau", day: "mercredi", period: "matin", room: 3, typeOccupation: "complete", start: "08:00", end: "12:00" },
+    { professionalId: "nouveau", day: "mercredi", period: "apres-midi", room: 3, typeOccupation: "complete", start: "13:00", end: "19:00" },
+    { professionalId: "nouveau", day: "jeudi", period: "matin", room: 1, typeOccupation: "complete", start: "08:00", end: "12:00" },
+    { professionalId: "nouveau", day: "vendredi", period: "matin", room: 3, typeOccupation: "complete", start: "08:00", end: "12:00" },
+    { professionalId: "nouveau", day: "vendredi", period: "apres-midi", room: 1, typeOccupation: "complete", start: "13:00", end: "19:00" },
   ],
 };
 
@@ -99,7 +117,7 @@ const dayById = new Map(PLANNING_DATA.days.map((day) => [day.id, day]));
 const periodById = new Map(PLANNING_DATA.periods.map((period) => [period.id, period]));
 let selectedProfessionalId = null;
 let assignments = new Map();
-let offsitePreferences = {};
+let offsitePreferences = { ...PLANNING_DATA.defaultOffsitePreferences };
 const hourCellByKey = new Map();
 const summaryCellByKey = new Map();
 const STORAGE_KEY = "scm-kine:planning-salles:v1";
@@ -629,7 +647,7 @@ function renderLegend() {
 function resetPlanning() {
   if (!window.confirm("Réinitialiser les deux plannings et effacer les essais mémorisés sur ce navigateur ?")) return;
   assignments = buildInitialAssignments();
-  offsitePreferences = {};
+  offsitePreferences = { ...PLANNING_DATA.defaultOffsitePreferences };
   hourCellByKey.forEach((cell, key) => {
     const [dayId, room, hour] = key.split("|");
     renderHourCell(cell, key, dayId, Number(room), Number(hour));

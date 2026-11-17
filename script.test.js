@@ -8,11 +8,27 @@ const {
   summarizeNewProfessional, decodeSavedPlanning,
 } = require("./script.js");
 
-test("le planning initial reste cohérent et le nouveau kiné n’est pas prérempli", () => {
+test("le scénario de départ correspond exactement aux cases et activités validées", () => {
   assert.deepEqual(validateData(), { errors: [], blockingConflicts: [], advisoryOverlaps: [] });
-  const summary = summarizeNewProfessional(buildInitialAssignments());
+  const initial = buildInitialAssignments();
+  const summary = summarizeNewProfessional(initial, PLANNING_DATA.defaultOffsitePreferences);
   assert.equal(summary.length, 10);
-  assert.ok(summary.every((item) => item.label === "Domiciles ou repos" && !item.gym));
+  assert.deepEqual(summary.map((item) => item.label), [
+    "Salle 3 + espace gym", "Salle 1", "Salle 3 + espace gym", "Salle 1", "Salle 3 + espace gym",
+    "Domiciles", "Domiciles", "Salle 3 + espace gym", "Domiciles", "Salle 1 + espace gym",
+  ]);
+  const expectedSlots = [
+    ...["lundi|3", "mardi|1", "mercredi|3", "jeudi|1", "vendredi|3"]
+      .flatMap((place) => [8, 9, 10, 11].map((hour) => `${place}|${hour}`)),
+    ...["mercredi|3", "vendredi|1"]
+      .flatMap((place) => [13, 14, 15, 16, 17, 18].map((hour) => `${place}|${hour}`)),
+  ];
+  assert.deepEqual([...initial].filter(([, ids]) => ids.has("nouveau")).map(([key]) => key).sort(), expectedSlots.sort());
+  assert.ok([...initial.values()].every((ids) => ids.size === 1));
+});
+
+test("un planning sans affectation affiche toujours Domiciles ou repos", () => {
+  assert.ok(summarizeNewProfessional(new Map()).every((item) => item.label === "Domiciles ou repos" && !item.gym));
 });
 
 test("une heure suffit ; toutes les demi-journées sont reportées et seules cinq donnent accès au gym", () => {
