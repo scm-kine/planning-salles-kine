@@ -17,6 +17,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   min-width: 320px;
@@ -298,6 +302,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .legend {
@@ -335,12 +340,15 @@ body {
 }
 
 .legend-item:focus-visible,
-.reset-button:focus-visible {
+.reset-button:focus-visible,
+.print-button:focus-visible,
+.offsite-select:focus-visible {
   outline: 3px solid rgba(23, 41, 54, 0.35);
   outline-offset: 3px;
 }
 
-.reset-button {
+.reset-button,
+.print-button {
   flex: 0 0 auto;
   min-height: 29px;
   padding: 5px 10px;
@@ -352,8 +360,153 @@ body {
   font: 700 0.69rem/1 "Avenir Next", Avenir, "Segoe UI", Arial, sans-serif;
 }
 
-.reset-button:hover {
+.reset-button:hover,
+.print-button:hover {
   background: #eef2f4;
+}
+
+.new-planning {
+  margin-top: 32px;
+}
+
+.summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.summary-heading h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.summary-scroll {
+  overflow-x: auto;
+  border: 1px solid #8e9ba3;
+  background: #ffffff;
+}
+
+.summary-scroll:focus-visible {
+  outline: 3px solid rgba(43, 100, 139, 0.28);
+  outline-offset: 3px;
+}
+
+.summary-table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-spacing: 0;
+  font-size: 0.85rem;
+}
+
+.summary-table th,
+.summary-table td {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+
+.summary-table tr > :last-child {
+  border-right: 0;
+}
+
+.summary-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.summary-table thead th {
+  height: 38px;
+  padding: 8px;
+  background: var(--day);
+  font-family: "Avenir Next Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+.summary-table tr > :first-child {
+  width: 88px;
+}
+
+.summary-table tbody th {
+  padding: 8px;
+  background: #fafbfc;
+  color: #566873;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.summary-table tbody tr {
+  height: 112px;
+}
+
+.summary-table td {
+  padding: 12px 8px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.summary-table td.at-cabinet {
+  background: #f2bd79;
+  font-weight: 750;
+}
+
+.summary-table td.is-home {
+  background: #edf3f6;
+}
+
+.summary-table td.is-rest {
+  background: #f4f5f6;
+}
+
+.summary-table td:not(.at-cabinet) .summary-label {
+  display: none;
+}
+
+.offsite-select {
+  width: 100%;
+  max-width: 195px;
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: #425761;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.offsite-select:hover {
+  border-color: var(--line);
+}
+
+.summary-table td.has-conflict {
+  box-shadow: inset 0 0 0 2px var(--danger);
+}
+
+.summary-conflict {
+  display: block;
+  margin-top: 4px;
+  color: #8b1c13;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.storage-warning {
+  margin: 14px 0 0;
+  color: #8b3813;
+  font-size: 0.8rem;
+}
+
+.app-version {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.65rem;
+  text-align: right;
 }
 
 @media (max-width: 760px) {
@@ -442,7 +595,11 @@ body {
   }
 
   .selection-status,
-  .reset-button {
+  .reset-button,
+  .print-button,
+  .storage-warning,
+  .app-version,
+  .offsite-select {
     display: none;
   }
 
@@ -450,5 +607,58 @@ body {
     min-width: 27mm;
     padding: 1.2mm 2mm;
     font-size: 6pt;
+  }
+
+  body[data-print-target="rooms"] .new-planning,
+  body[data-print-target="new"] .full-planning {
+    display: none;
+  }
+
+  .new-planning {
+    break-before: page;
+    margin-top: 0;
+  }
+
+  body[data-print-target="new"] .new-planning {
+    break-before: auto;
+  }
+
+  .summary-heading {
+    margin-bottom: 6mm;
+  }
+
+  .summary-heading h2 {
+    font-size: 14pt;
+  }
+
+  .summary-scroll {
+    overflow: visible;
+  }
+
+  .summary-table {
+    min-width: 0;
+    font-size: 11pt;
+  }
+
+  .summary-table tr > :first-child {
+    width: 23mm;
+  }
+
+  .summary-table thead th {
+    height: 12mm;
+    font-size: 9pt;
+  }
+
+  .summary-table tbody th {
+    font-size: 9pt;
+  }
+
+  .summary-table tbody tr {
+    height: 48mm;
+    break-inside: avoid;
+  }
+
+  .summary-table td:not(.at-cabinet) .summary-label {
+    display: block;
   }
 }

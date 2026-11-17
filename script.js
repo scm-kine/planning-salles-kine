@@ -21,6 +21,13 @@ const PLANNING_DATA = {
 
   rooms: [1, 2, 3, 4, 5],
 
+  // Accès à l’espace gym pour le nouveau kiné, indépendant des salles choisies.
+  gymAccess: {
+    lundi: ["matin"],
+    mercredi: ["matin", "apres-midi"],
+    vendredi: ["matin", "apres-midi"],
+  },
+
   professionals: [
     { id: "damien", name: "Damien", color: "#a8cdea", ink: "#172936", active: true },
     { id: "johan", name: "Johan", color: "#b7dba8", ink: "#172936", active: true },
@@ -92,7 +99,15 @@ const dayById = new Map(PLANNING_DATA.days.map((day) => [day.id, day]));
 const periodById = new Map(PLANNING_DATA.periods.map((period) => [period.id, period]));
 let selectedProfessionalId = null;
 let assignments = new Map();
+let offsitePreferences = {};
 const hourCellByKey = new Map();
+const summaryCellByKey = new Map();
+const STORAGE_KEY = "scm-kine:planning-salles:v1";
+const OFFSITE_OPTIONS = [
+  { value: "undecided", label: "Domiciles ou repos" },
+  { value: "home", label: "Domiciles" },
+  { value: "rest", label: "Repos" },
+];
 
 function timeToMinutes(time) {
   const [hours, minutes] = time.split(":").map(Number);
@@ -148,6 +163,196 @@ function buildInitialAssignments() {
   });
 
   return initialAssignments;
+}
+
+function halfDayKey(day, period) {
+  return `${day}|${period}`;
+}
+
+// Le second tableau est toujours dérivé des cases horaires : aucune copie
+// indépendante des affectations de salle n’est enregistrée.
+function summarizeNewProfessional(currentAssignments, preferences = {}) {
+  return PLANNING_DATA.periods.flatMap((period) =>
+    PLANNING_DATA.days.map((day) => {
+      const hours = periodHours(period);
+      const rooms = PLANNING_DATA.rooms.filter((room) =>
+        hours.some((hour) => currentAssignments.get(slotKey(day.id, room, hour))?.has("nouveau")),
+      );
+      const conflict = rooms.some((room) =>
+        hours.some((hour) => {
+          const occupants = currentAssignments.get(slotKey(day.id, room, hour));
+          return occupants?.has("nouveau") && occupants.size > 1;
+        }),
+      );
+      const key = halfDayKey(day.id, period.id);
+      const offsite = OFFSITE_OPTIONS.find((option) => option.value === preferences[key])
+        ?? OFFSITE_OPTIONS[0];
+      const roomLabel = rooms.length > 1
+        ? `Salles ${rooms.slice(0, -1).join(", ")} et ${rooms.at(-1)}`
+        : rooms.length ? `Salle ${rooms[0]}` : "";
+      const gym = rooms.length > 0 && (PLANNING_DATA.gymAccess[day.id] ?? []).includes(period.id);
+      return {
+        key, day: day.id, period: period.id, rooms, gym, conflict,
+        offsite: offsite.value,
+        label: rooms.length ? `${roomLabel}${gym ? " + espace gym" : ""}` : offsite.label,
+      };
+    }),
+  );
+}
+
+function decodeSavedPlanning(raw) {
+  const saved = JSON.parse(raw);
+  if (!saved || saved.version !== 1 || !Array.isArray(saved.assignments)) {
+    throw new Error("Format de sauvegarde inconnu.");
+  }
+  const restored = new Map();
+  saved.assignments.forEach((entry) => {
+    if (!Array.isArray(entry) || entry.length !== 2) throw new Error("Case invalide.");
+    const [key, ids] = entry;
+    if (typeof key !== "string" || !Array.isArray(ids)) throw new Error("Case invalide.");
+    const [day, room, hour] = key.split("|");
+    const validHour = PLANNING_DATA.periods.some((period) => periodHours(period).includes(Number(hour)));
+    if (!dayById.has(day) || !PLANNING_DATA.rooms.includes(Number(room)) || !validHour
+      || key !== slotKey(day, Number(room), Number(hour))
+      || ids.some((id) => !professionalById.get(id)?.active)) {
+      throw new Error("Case inconnue.");
+    }
+    if (ids.length) restored.set(key, new Set(ids));
+  });
+  const preferences = {};
+  for (const day of PLANNING_DATA.days) {
+    for (const period of PLANNING_DATA.periods) {
+      const key = halfDayKey(day.id, period.id);
+      const choice = saved.offsitePreferences?.[key];
+      if (OFFSITE_OPTIONS.some((option) => option.value === choice)) preferences[key] = choice;
+    }
+  }
+  return { assignments: restored, offsitePreferences: preferences };
+}
+
+function storageWarning(message) {
+  const warning = document.querySelector("#storageWarning");
+  warning.textContent = message;
+  warning.hidden = !message;
+}
+
+function restorePlanning() {
+  let raw;
+  try {
+    raw = window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    storageWarning("La mémorisation est indisponible dans ce navigateur. Les essais restent possibles, mais ne seront pas conservés après fermeture.");
+    return;
+  }
+  if (raw === null) return;
+  try {
+    const restored = decodeSavedPlanning(raw);
+    assignments = restored.assignments;
+    offsitePreferences = restored.offsitePreferences;
+  } catch {
+    storageWarning("La sauvegarde locale n’a pas pu être relue. Le planning de départ est affiché.");
+  }
+}
+
+function savePlanning() {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: 1,
+      assignments: [...assignments].map(([key, occupants]) => [key, [...occupants]]),
+      offsitePreferences,
+    }));
+    storageWarning("");
+  } catch {
+    storageWarning("Les derniers changements ne peuvent pas être mémorisés. Vous pouvez continuer vos essais et les imprimer en PDF.");
+  }
+}
+
+function buildNewPlanning() {
+  const table = document.querySelector("#newPlanningTable");
+  const head = table.createTHead();
+  const header = head.insertRow();
+  const corner = document.createElement("th");
+  corner.scope = "col";
+  const cornerLabel = document.createElement("span");
+  cornerLabel.className = "visually-hidden";
+  cornerLabel.textContent = "Demi-journée";
+  corner.append(cornerLabel);
+  header.append(corner);
+  for (const day of PLANNING_DATA.days) {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = day.label;
+    header.append(cell);
+  }
+  const body = table.createTBody();
+  for (const period of PLANNING_DATA.periods) {
+    const row = body.insertRow();
+    const label = document.createElement("th");
+    label.scope = "row";
+    label.textContent = period.label;
+    row.append(label);
+    for (const day of PLANNING_DATA.days) {
+      const key = halfDayKey(day.id, period.id);
+      const cell = row.insertCell();
+      cell.dataset.halfDay = key;
+      const text = document.createElement("span");
+      text.className = "summary-label";
+      const select = document.createElement("select");
+      select.className = "offsite-select";
+      select.setAttribute("aria-label", `${day.label}, ${period.label.toLowerCase()} : activité hors cabinet`);
+      for (const option of OFFSITE_OPTIONS) {
+        const item = document.createElement("option");
+        item.value = option.value;
+        item.textContent = option.label;
+        select.append(item);
+      }
+      select.addEventListener("change", () => {
+        offsitePreferences[key] = select.value;
+        renderNewPlanning();
+        savePlanning();
+      });
+      const conflict = document.createElement("span");
+      conflict.className = "summary-conflict";
+      conflict.textContent = "Conflit de salle";
+      cell.append(text, select, conflict);
+      summaryCellByKey.set(key, { cell, text, select, conflict });
+    }
+  }
+  renderNewPlanning();
+}
+
+function renderNewPlanning() {
+  for (const item of summarizeNewProfessional(assignments, offsitePreferences)) {
+    const { cell, text, select, conflict } = summaryCellByKey.get(item.key);
+    const atCabinet = item.rooms.length > 0;
+    cell.classList.toggle("at-cabinet", atCabinet);
+    cell.classList.toggle("is-rest", !atCabinet && item.offsite === "rest");
+    cell.classList.toggle("is-home", !atCabinet && item.offsite === "home");
+    cell.classList.toggle("has-conflict", item.conflict);
+    text.textContent = item.label;
+    select.hidden = atCabinet;
+    select.value = item.offsite;
+    conflict.hidden = !item.conflict;
+  }
+}
+
+function printPlanning(target) {
+  document.body.dataset.printTarget = target;
+  const originalTitle = document.title;
+  document.title = target === "new" ? "Planning du nouveau kiné" : "Planning des salles";
+  const cleanup = () => {
+    delete document.body.dataset.printTarget;
+    document.title = originalTitle;
+  };
+  window.addEventListener("afterprint", cleanup, { once: true });
+  // Laisse le navigateur appliquer la mise en page avant l’aperçu d’impression.
+  window.requestAnimationFrame(() => {
+    try { window.print(); }
+    catch (error) {
+      cleanup();
+      throw error;
+    }
+  });
 }
 
 function validateData() {
@@ -324,6 +529,8 @@ function toggleHour(dayId, room, hour) {
   else assignments.delete(key);
 
   renderHourCell(hourCellByKey.get(key), key, dayId, room, hour);
+  renderNewPlanning();
+  savePlanning();
 
   const professional = professionalById.get(selectedProfessionalId);
   const action = wasPresent ? "retiré" : "ajouté";
@@ -416,11 +623,15 @@ function renderLegend() {
 }
 
 function resetPlanning() {
+  if (!window.confirm("Réinitialiser les deux plannings et effacer les essais mémorisés sur ce navigateur ?")) return;
   assignments = buildInitialAssignments();
+  offsitePreferences = {};
   hourCellByKey.forEach((cell, key) => {
     const [dayId, room, hour] = key.split("|");
     renderHourCell(cell, key, dayId, Number(room), Number(hour));
   });
+  renderNewPlanning();
+  savePlanning();
   updateSelectionStatus("Planning réinitialisé à l’organisation de départ.");
 }
 
@@ -428,13 +639,18 @@ function initializePlanning() {
   const board = document.querySelector("#planningBoard");
   const validation = validateData();
   assignments = buildInitialAssignments();
+  restorePlanning();
 
   appendHeaders(board);
   appendPeriod(board, PLANNING_DATA.periods[0]);
   appendLunchGap(board);
   appendPeriod(board, PLANNING_DATA.periods[1]);
   renderLegend();
+  buildNewPlanning();
   document.querySelector("#resetButton").addEventListener("click", resetPlanning);
+  document.querySelectorAll("[data-print-target]").forEach((button) => {
+    button.addEventListener("click", () => printPlanning(button.dataset.printTarget));
+  });
 
   const status = document.querySelector("#validationStatus");
   status.textContent = validation.errors.length
@@ -451,5 +667,8 @@ if (typeof module !== "undefined" && module.exports) {
     timeToMinutes,
     periodHours,
     buildInitialAssignments,
+    summarizeNewProfessional,
+    decodeSavedPlanning,
+    STORAGE_KEY,
   };
 }
