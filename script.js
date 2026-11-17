@@ -192,7 +192,7 @@ function summarizeNewProfessional(currentAssignments, preferences = {}) {
         : rooms.length ? `Salle ${rooms[0]}` : "";
       const gym = rooms.length > 0 && (PLANNING_DATA.gymAccess[day.id] ?? []).includes(period.id);
       return {
-        key, day: day.id, period: period.id, rooms, gym, conflict,
+        key, day: day.id, period: period.id, rooms, roomLabel, gym, conflict,
         offsite: offsite.value,
         label: rooms.length ? `${roomLabel}${gym ? " + espace gym" : ""}` : offsite.label,
       };
@@ -297,6 +297,9 @@ function buildNewPlanning() {
       cell.dataset.halfDay = key;
       const text = document.createElement("span");
       text.className = "summary-label";
+      const gym = document.createElement("span");
+      gym.className = "summary-gym";
+      gym.textContent = "(+ espace gym)";
       const select = document.createElement("select");
       select.className = "offsite-select";
       select.setAttribute("aria-label", `${day.label}, ${period.label.toLowerCase()} : activité hors cabinet`);
@@ -314,8 +317,8 @@ function buildNewPlanning() {
       const conflict = document.createElement("span");
       conflict.className = "summary-conflict";
       conflict.textContent = "Conflit de salle";
-      cell.append(text, select, conflict);
-      summaryCellByKey.set(key, { cell, text, select, conflict });
+      cell.append(text, gym, select, conflict);
+      summaryCellByKey.set(key, { cell, text, gym, select, conflict });
     }
   }
   renderNewPlanning();
@@ -323,13 +326,14 @@ function buildNewPlanning() {
 
 function renderNewPlanning() {
   for (const item of summarizeNewProfessional(assignments, offsitePreferences)) {
-    const { cell, text, select, conflict } = summaryCellByKey.get(item.key);
+    const { cell, text, gym, select, conflict } = summaryCellByKey.get(item.key);
     const atCabinet = item.rooms.length > 0;
     cell.classList.toggle("at-cabinet", atCabinet);
     cell.classList.toggle("is-rest", !atCabinet && item.offsite === "rest");
     cell.classList.toggle("is-home", !atCabinet && item.offsite === "home");
     cell.classList.toggle("has-conflict", item.conflict);
-    text.textContent = item.label;
+    text.textContent = atCabinet ? item.roomLabel : item.label;
+    gym.hidden = !item.gym;
     select.hidden = atCabinet;
     select.value = item.offsite;
     conflict.hidden = !item.conflict;

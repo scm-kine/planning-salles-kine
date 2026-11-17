@@ -456,11 +456,19 @@ body {
 }
 
 .summary-table td.is-home {
-  background: #edf3f6;
+  background: #fff1a8;
 }
 
 .summary-table td.is-rest {
-  background: #f4f5f6;
+  background: #ffffff;
+}
+
+.summary-gym {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.82em;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .summary-table td:not(.at-cabinet) .summary-label {
